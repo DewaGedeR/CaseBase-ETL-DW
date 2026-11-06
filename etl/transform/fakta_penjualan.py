@@ -7,7 +7,7 @@ from transform.dim_waktu import parse_tanggal, tanggal_ke_key
 log = logging.getLogger(__name__)
 
 
-# 1. TRANSFORM FAKTA PENJUALAN
+# TRANSFORM FAKTA PENJUALAN
 def transform_fakta_penjualan(
     df_penjualan,
     df_dim_pelanggan,
@@ -38,9 +38,8 @@ def transform_fakta_penjualan(
     df = df_penjualan.copy()
     n_mentah = len(df)
 
-    # 3. Menghapus baris duplikat penuh
+    # 3. Menghapus duplikasi baris penuh
     df = df.drop_duplicates()
-
     n_duplikat = n_mentah - len(df)
 
     # 4. Membersihkan ID transaksi dan ID dimensi
@@ -57,33 +56,37 @@ def transform_fakta_penjualan(
             .str.strip()
         )
 
-        df[col] = df[col].replace("", pd.NA)
+        df[col] = df[col].replace(
+            ["", "NULL", "NONE", "NAN", "-"],
+            pd.NA
+        )
 
+    # Menyeragamkan format ID pelanggan
     df["id_pelanggan"] = df["id_pelanggan"].str.upper()
 
-    # 5. Menghapus duplikasi ID transaksi
-    # n_sebelum_id = len(df)
-
-    # df = df.drop_duplicates(
-    #     subset=["id_transaksi"],
-    #     keep="first"
-    # )
-
-    # n_duplikat_id = n_sebelum_id - len(df)
-
-    # 6. Mengubah tanggal transaksi menjadi datetime
+    # 5. Mengubah tanggal transaksi menjadi datetime
     df["tanggal"] = pd.to_datetime(
         df["tanggal"].apply(parse_tanggal)
     )
 
-    # 7. Membuat waktu_key dari tanggal transaksi
+    n_tanggal_invalid = int(df["tanggal"].isna().sum())
+
+    # 6. Membuat waktu_key dari tanggal transaksi
     df["waktu_key"] = tanggal_ke_key(
         df["tanggal"]
     )
 
-    n_tanggal_invalid = int(
-        df["waktu_key"].isna().sum()
+    # 7. Memastikan waktu_key tersedia pada dimensi waktu
+    ada_di_dim_waktu = df["waktu_key"].isin(
+        df_dim_waktu["waktu_key"]
     )
+
+    n_waktu_tidak_ditemukan = int(
+        (~ada_di_dim_waktu).sum()
+    )
+
+    # Mengeluarkan transaksi yang tidak memiliki pasangan waktu
+    df = df[ada_di_dim_waktu].copy()
 
     # 8. Mengubah qty menjadi numerik
     df["qty"] = pd.to_numeric(
@@ -91,7 +94,8 @@ def transform_fakta_penjualan(
         errors="coerce"
     )
 
-    # 9. Membersihkan harga satuan ("Rp85.000" menjadi 85000)
+    # 9. Membersihkan harga satuan
+    # Contoh: Rp85.000 menjadi 85000
     df["harga_satuan"] = pd.to_numeric(
         df["harga_satuan"]
         .astype("string")
@@ -109,10 +113,10 @@ def transform_fakta_penjualan(
         ).sum()
     )
 
-    # 10. Membuang transaksi dengan qty kosong, nol, atau negatif
+    # 10. Mengeluarkan qty kosong, nol, atau negatif
     n_sebelum_qty = len(df)
 
-    df = df[df["qty"] > 0]
+    df = df[df["qty"] > 0].copy()
 
     n_qty_tidak_valid = n_sebelum_qty - len(df)
 
@@ -128,6 +132,7 @@ def transform_fakta_penjualan(
         peta_pelanggan["id_pelanggan"]
         .astype("string")
         .str.strip()
+        .str.upper()
     )
 
     df = df.merge(
@@ -158,17 +163,7 @@ def transform_fakta_penjualan(
         validate="many_to_one"
     )
 
-    # 13. Memastikan waktu_key tersedia pada dimensi waktu
-    ada_di_dim_waktu = df["waktu_key"].isin(
-        df_dim_waktu["waktu_key"]
-    )
-
-    n_waktu_tidak_ditemukan = int(
-        (~ada_di_dim_waktu).sum()
-    )
-
-    # 14. Pelanggan atau produk tanpa pasangan diarahkan ke key 0
-    # (baris "Tidak Diketahui" pada dimensi)
+    # 13. Menghitung pelanggan dan produk yang tidak ditemukan
     n_pelanggan_tidak_ditemukan = int(
         df["pelanggan_key"].isna().sum()
     )
@@ -177,6 +172,8 @@ def transform_fakta_penjualan(
         df["produk_key"].isna().sum()
     )
 
+    # 14. Mengarahkan data tanpa pasangan ke key 0
+    # Key 0 merupakan baris "Tidak Diketahui" pada dimensi
     df["pelanggan_key"] = df["pelanggan_key"].fillna(0)
     df["produk_key"] = df["produk_key"].fillna(0)
 
@@ -198,7 +195,7 @@ def transform_fakta_penjualan(
         "Tidak Diketahui"
     )
 
-    # mapping metode bayar
+    # 17. Menghubungkan dengan dimensi metode pembayaran
     peta_metode_bayar = df_dim_metode_bayar[
         [
             "metode_bayar",
@@ -206,21 +203,22 @@ def transform_fakta_penjualan(
         ]
     ].copy()
 
-    # merge dengan dimensi metode bayar
     df = df.merge(
-            peta_metode_bayar,
-            on="metode_bayar",
-            how="left"
-        )
-    
-    # fallback
-    df['metode_bayar_key'] = df['metode_bayar_key'].fillna(0).astype(int)
+        peta_metode_bayar,
+        on="metode_bayar",
+        how="left",
+        validate="many_to_one"
+    )
 
-    # 17. Menghapus data yang tidak memiliki ID transaksi, waktu_key
-    # pada dimensi waktu, atau nilai ukuran transaksi yang valid
+    # Jika metode pembayaran tidak ditemukan, gunakan key 0
+    df["metode_bayar_key"] = (
+        df["metode_bayar_key"]
+        .fillna(0)
+    )
+
+    # 18. Menghapus data yang tidak memiliki ID transaksi
+    # atau nilai transaksi yang valid
     jumlah_awal = len(df)
-
-    df = df[ada_di_dim_waktu.loc[df.index]]
 
     df = df.dropna(
         subset=[
@@ -229,47 +227,30 @@ def transform_fakta_penjualan(
             "qty",
             "harga_satuan"
         ]
-    )
+    ).copy()
 
     jumlah_dihapus = jumlah_awal - len(df)
 
-    # 18. Memastikan tipe data key dan ukuran transaksi
+    # 19. Memastikan tipe data akhir
     df["waktu_key"] = df["waktu_key"].astype(int)
     df["pelanggan_key"] = df["pelanggan_key"].astype(int)
     df["produk_key"] = df["produk_key"].astype(int)
+    df["metode_bayar_key"] = df["metode_bayar_key"].astype(int)
 
     df["qty"] = df["qty"].astype(int)
     df["harga_satuan"] = df["harga_satuan"].astype(int)
     df["total_penjualan"] = df["total_penjualan"].astype(int)
 
-    # 19. Memilih kolom tabel fakta
+    # 20. Memilih kolom tabel fakta
     fakta_final = df[kolom_fakta].copy()
 
-    # 20. Logging hasil transformasi
-    log.info(
-        "Baris mentah: %d",
-        n_mentah
-    )
-
-    log.info(
-        "Duplikat dihapus: %d (baris penuh)",
-        n_duplikat
-    )
-
-    log.info(
-        "Tanggal tidak valid: %d",
-        n_tanggal_invalid
-    )
-
-    log.info(
-        "Nilai qty/harga tidak valid: %d",
-        n_numerik_invalid
-    )
-
-    log.info(
-        "Qty kosong/nol/negatif dihapus: %d",
-        n_qty_tidak_valid
-    )
+    # 21. Logging hasil transformasi
+    log.info("Baris mentah: %d", n_mentah)
+    log.info("Duplikat dihapus: %d", n_duplikat)
+    log.info("Tanggal tidak valid: %d", n_tanggal_invalid)
+    log.info("Waktu tidak ditemukan di dimensi: %d", n_waktu_tidak_ditemukan)
+    log.info("Nilai qty/harga tidak valid: %d", n_numerik_invalid)
+    log.info("Qty kosong/nol/negatif dihapus: %d", n_qty_tidak_valid)
 
     log.info(
         "Pelanggan tidak ditemukan (key 0): %d",
@@ -281,15 +262,7 @@ def transform_fakta_penjualan(
         n_produk_tidak_ditemukan
     )
 
-    log.info(
-        "Waktu tidak ditemukan: %d",
-        n_waktu_tidak_ditemukan
-    )
-
-    log.info(
-        "Data tidak valid yang dihapus: %d",
-        jumlah_dihapus
-    )
+    log.info("Data tidak valid yang dihapus pada tahap akhir: %d", jumlah_dihapus)
 
     log.info(
         "fakta_penjualan: %d baris, %d kolom",

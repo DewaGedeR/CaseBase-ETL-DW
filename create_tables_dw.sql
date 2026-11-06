@@ -1,8 +1,12 @@
 -- Skema bintang TokoMaju (database tujuan: tokomaju_dw)
--- Dijalankan otomatis oleh etl/load.py di awal proses load.
+-- Disesuaikan dengan keluaran etl/load.py:
+--   * 4 dimensi: dim_pelanggan, dim_produk, dim_waktu, dim_metode_bayar
+--   * fakta_penjualan memakai composite PK (id_transaksi, produk_key)
+--   * metode bayar di fakta berupa FK metode_bayar_key ke dim_metode_bayar
 
 -- 1. Hapus tabel lama (fakta lebih dulu karena merujuk dimensi)
 DROP TABLE IF EXISTS fakta_penjualan;
+DROP TABLE IF EXISTS dim_metode_bayar;
 DROP TABLE IF EXISTS dim_waktu;
 DROP TABLE IF EXISTS dim_produk;
 DROP TABLE IF EXISTS dim_pelanggan;
@@ -33,14 +37,29 @@ CREATE TABLE dim_pelanggan (
     telepon        VARCHAR(20)
 );
 
+-- CATATAN: kolom selain metode_bayar_key mengikuti dugaan (sesuaikan dengan
+-- DataFrame dim_metode_bayar di transform.py).
+CREATE TABLE dim_metode_bayar (
+    metode_bayar_key INT         PRIMARY KEY,
+    metode_bayar     VARCHAR(20) NOT NULL
+);
+
 -- 3. Tabel fakta
 CREATE TABLE fakta_penjualan (
-    id_transaksi    VARCHAR(10) PRIMARY KEY,
-    waktu_key       INT         NOT NULL REFERENCES dim_waktu (waktu_key),
-    pelanggan_key   INT         NOT NULL REFERENCES dim_pelanggan (pelanggan_key),
-    produk_key      INT         NOT NULL REFERENCES dim_produk (produk_key),
-    qty             INT         NOT NULL CHECK (qty > 0),
-    harga_satuan    NUMERIC(12, 0) NOT NULL,
-    total_penjualan NUMERIC(14, 0) NOT NULL,
-    metode_bayar    VARCHAR(20) NOT NULL
+    id_transaksi     VARCHAR(10)    NOT NULL,
+    waktu_key        INT            NOT NULL,
+    pelanggan_key    INT            NOT NULL,
+    produk_key       INT            NOT NULL,
+    metode_bayar_key INT            NOT NULL,
+    qty              INT            NOT NULL CHECK (qty > 0),
+    harga_satuan     NUMERIC(12, 0) NOT NULL,
+    total_penjualan  NUMERIC(14, 0) NOT NULL,
+
+    -- composite primary key (satu transaksi bisa memuat banyak produk)
+    CONSTRAINT pk_fakta_penjualan PRIMARY KEY (id_transaksi, produk_key),
+
+    CONSTRAINT fk_fakta_waktu        FOREIGN KEY (waktu_key)        REFERENCES dim_waktu (waktu_key),
+    CONSTRAINT fk_fakta_pelanggan    FOREIGN KEY (pelanggan_key)    REFERENCES dim_pelanggan (pelanggan_key),
+    CONSTRAINT fk_fakta_produk       FOREIGN KEY (produk_key)       REFERENCES dim_produk (produk_key),
+    CONSTRAINT fk_fakta_metode_bayar FOREIGN KEY (metode_bayar_key) REFERENCES dim_metode_bayar (metode_bayar_key)
 );

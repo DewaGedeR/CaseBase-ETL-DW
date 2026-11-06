@@ -2,4 +2,6 @@
 docker-compose.yml
 
 # env
-.env
+.env 
+
+venv

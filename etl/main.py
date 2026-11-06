@@ -1,11 +1,12 @@
 import logging
 
-from etl.extract import extract
-from etl.transform.dim_produk import transform_dim_produk
-from etl.transform.dim_pelanggan import build_dim_pelanggan
-from etl.transform.dim_waktu import build_dim_waktu
-from etl.transform.fakta_penjualan import transform_fakta_penjualan
-from etl.load import load
+from extract import extract
+from transform.dim_produk import transform_dim_produk
+from transform.dim_pelanggan import build_dim_pelanggan
+from transform.dim_waktu import build_dim_waktu
+from transform.dim_metode_bayar import build_dim_metode_bayar
+from transform.fakta_penjualan import transform_fakta_penjualan
+from load import load
 
 
 # KONFIGURASI LOGGING
@@ -35,12 +36,16 @@ def main():
         # 4. TRANSFORM DIMENSI WAKTU
         dim_waktu = build_dim_waktu(df_jual)
 
+        # transform dime metode bayar
+        dim_metode_bayar = build_dim_metode_bayar(df_jual)        
+
         # 5. TRANSFORM FAKTA PENJUALAN
         fakta_penjualan = transform_fakta_penjualan(
             df_jual,
             dim_pelanggan,
             dim_produk,
-            dim_waktu
+            dim_waktu,
+            dim_metode_bayar
         )
 
         # 6. PREVIEW HASIL TRANSFORMASI
@@ -55,6 +60,9 @@ def main():
         print("\n=== DIMENSI WAKTU ===")
         print(dim_waktu.head(5).to_string(index=False))
 
+        print("\n=== DIMENSI METODE BAYAR ===")
+        print(dim_metode_bayar.head(5).to_string(index=False))
+
         print("\n=== FAKTA PENJUALAN ===")
         print(fakta_penjualan.head(5).to_string(index=False))
 
@@ -63,6 +71,7 @@ def main():
             dim_produk,
             dim_pelanggan,
             dim_waktu,
+            dim_metode_bayar,
             fakta_penjualan
         )
 
@@ -71,7 +80,6 @@ def main():
     except Exception:
         log.exception("ETL TOKOMAJU GAGAL.")
         raise
-
 
 if __name__ == "__main__":
     main()

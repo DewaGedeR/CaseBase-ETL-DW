@@ -2,7 +2,7 @@ import logging
 
 from sqlalchemy import create_engine, text
 
-from etl.config import TARGET_URL
+from config import TARGET_URL
 
 log = logging.getLogger(__name__)
 
@@ -54,6 +54,7 @@ def load(
     dim_produk,
     dim_pelanggan,
     dim_waktu,
+    dim_metode_bayar,
     fakta_penjualan
 ):
 
@@ -86,6 +87,13 @@ def load(
             load_to_postgres(
                 dim_waktu,
                 "dim_waktu",
+                connection
+            )
+
+            # load dimensi metode bayar
+            load_to_postgres(
+                dim_metode_bayar,
+                "dim_metode_bayar",
                 connection
             )
 

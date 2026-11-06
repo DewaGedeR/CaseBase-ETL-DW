@@ -2,7 +2,7 @@ import logging
 
 import pandas as pd
 
-from etl.transform.dim_waktu import parse_tanggal, tanggal_ke_key
+from transform.dim_waktu import parse_tanggal, tanggal_ke_key
 
 log = logging.getLogger(__name__)
 
@@ -12,7 +12,8 @@ def transform_fakta_penjualan(
     df_penjualan,
     df_dim_pelanggan,
     df_dim_produk,
-    df_dim_waktu
+    df_dim_waktu,
+    df_dim_metode_bayar
 ):
 
     log.info("=== TRANSFORM FAKTA PENJUALAN ===")
@@ -22,10 +23,10 @@ def transform_fakta_penjualan(
         "waktu_key",
         "pelanggan_key",
         "produk_key",
+        "metode_bayar_key",
         "qty",
         "harga_satuan",
-        "total_penjualan",
-        "metode_bayar"
+        "total_penjualan"
     ]
 
     # 1. Memeriksa data penjualan
@@ -61,14 +62,14 @@ def transform_fakta_penjualan(
     df["id_pelanggan"] = df["id_pelanggan"].str.upper()
 
     # 5. Menghapus duplikasi ID transaksi
-    n_sebelum_id = len(df)
+    # n_sebelum_id = len(df)
 
-    df = df.drop_duplicates(
-        subset=["id_transaksi"],
-        keep="first"
-    )
+    # df = df.drop_duplicates(
+    #     subset=["id_transaksi"],
+    #     keep="first"
+    # )
 
-    n_duplikat_id = n_sebelum_id - len(df)
+    # n_duplikat_id = n_sebelum_id - len(df)
 
     # 6. Mengubah tanggal transaksi menjadi datetime
     df["tanggal"] = pd.to_datetime(
@@ -197,6 +198,24 @@ def transform_fakta_penjualan(
         "Tidak Diketahui"
     )
 
+    # mapping metode bayar
+    peta_metode_bayar = df_dim_metode_bayar[
+        [
+            "metode_bayar",
+            "metode_bayar_key"
+        ]
+    ].copy()
+
+    # merge dengan dimensi metode bayar
+    df = df.merge(
+            peta_metode_bayar,
+            on="metode_bayar",
+            how="left"
+        )
+    
+    # fallback
+    df['metode_bayar_key'] = df['metode_bayar_key'].fillna(0).astype(int)
+
     # 17. Menghapus data yang tidak memiliki ID transaksi, waktu_key
     # pada dimensi waktu, atau nilai ukuran transaksi yang valid
     jumlah_awal = len(df)
@@ -235,7 +254,6 @@ def transform_fakta_penjualan(
     log.info(
         "Duplikat dihapus: %d (baris penuh), %d (ID transaksi)",
         n_duplikat,
-        n_duplikat_id
     )
 
     log.info(

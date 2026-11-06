@@ -3,7 +3,7 @@ import logging
 import pandas as pd
 from sqlalchemy import create_engine
 
-from etl.config import CSV_PATH, XLSX_PATH, SOURCE_URL
+from config import CSV_PATH, XLSX_PATH, SOURCE_URL
 
 log = logging.getLogger(__name__)
 

@@ -103,8 +103,27 @@ def load(
                 "fakta_penjualan",
                 connection
             )
+            log.info("Membuat Primary Key dan Foreign Key Constraints...")
 
-        log.info("Load seluruh data warehouse berhasil.")
+            connection.execute(text("ALTER TABLE dim_pelanggan ADD PRIMARY KEY (pelanggan_key);"))
+            connection.execute(text("ALTER TABLE dim_produk ADD PRIMARY KEY (produk_key);"))
+            connection.execute(text("ALTER TABLE dim_waktu ADD PRIMARY KEY (waktu_key);"))
+            connection.execute(text("ALTER TABLE dim_metode_bayar ADD PRIMARY KEY (metode_bayar_key);"))
+            
+            #composite primary key
+            connection.execute(text("ALTER TABLE fakta_penjualan ADD PRIMARY KEY (id_transaksi, produk_key);"))
+
+            connection.execute(
+                text("""
+                    ALTER TABLE fakta_penjualan
+                        ADD CONSTRAINT fk_fakta_pelanggan FOREIGN KEY (pelanggan_key) REFERENCES dim_pelanggan(pelanggan_key),
+                        ADD CONSTRAINT fk_fakta_produk FOREIGN KEY (produk_key) REFERENCES dim_produk(produk_key),
+                        ADD CONSTRAINT fk_fakta_waktu FOREIGN KEY (waktu_key) REFERENCES dim_waktu(waktu_key),
+                        ADD CONSTRAINT fk_fakta_metode_bayar FOREIGN KEY (metode_bayar_key) REFERENCES dim_metode_bayar(metode_bayar_key);
+                    """)
+            )
+
+        log.info("Load seluruh data warehouse dan relasi berhasil.")
 
     except Exception:
         log.exception(

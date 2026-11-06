@@ -252,8 +252,8 @@ def transform_fakta_penjualan(
     )
 
     log.info(
-        "Duplikat dihapus: %d (baris penuh), %d (ID transaksi)",
-        n_duplikat,
+        "Duplikat dihapus: %d (baris penuh)",
+        n_duplikat
     )
 
     log.info(
